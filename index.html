@@ -1,45 +1,41 @@
 <!DOCTYPE html>
-<meta charset="utf-8">
-<style>
-
-body {
-  width: 1024px;
-  margin-top: 0;
-  margin: auto;
-  font-family: "Lato", "PT Serif", serif;
-  color: #222222;
-  padding: 0;
-  font-weight: 300;
-  line-height: 33px;
-  -webkit-font-smoothing: antialiased;
-}
-
-.node {
-  stroke: #7f8c8d;
-  stroke-width: 1.5px;
-  fill: #bdc3c7;
-  stroke-dasharray: 2px, 2px;
-}
-
-
-.link {
-  stroke: #ecf0f1;
-  stroke-opacity: .6;
-}
-
-.linktext{
-  fill: #95a5a6;
-  background-color: #ffffff;
-}
-
-text {
-    pointer-events: none;
-}
-
-</style>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Network Visualization</title>
+  <style>
+    body {
+      width: 1024px;
+      margin: auto;
+      font-family: "Lato", "PT Serif", serif;
+      color: #222222;
+      padding: 0;
+      font-weight: 300;
+      line-height: 33px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .node {
+      stroke: #7f8c8d;
+      stroke-width: 1.5px;
+      fill: #bdc3c7;
+      stroke-dasharray: 2px, 2px;
+    }
+    .link {
+      stroke: #ecf0f1;
+      stroke-opacity: .6;
+    }
+    .linktext {
+      fill: #95a5a6;
+      background-color: #ffffff;
+    }
+    text {
+      pointer-events: none;
+    }
+  </style>
+</head>
 <body>
  <script src="https://d3js.org/d3.v3.min.js"></script>
-<script src="dijkstra.js"></script>
+<script src="./public/dijkstra.js"></script>
 <script>
 
 var width = 960,
@@ -56,7 +52,7 @@ var svg = d3.select("body").append("svg")
     .attr("width", width)
     .attr("height", height);
 
-d3.csv("network.csv", function(error, data) {
+d3.csv("./public/network.csv", function(error, data) {
   
   var nodes = [], nodesByName = {}, links = [];
   function addNodeByName(fullname) {

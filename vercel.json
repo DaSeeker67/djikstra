@@ -1,9 +1,12 @@
 {
   "version": 2,
   "builds": [
-    { "src": "*.html", "use": "@vercel/static" }
+    { "src": "*.html", "use": "@vercel/static" },
+    { "src": "public/**", "use": "@vercel/static" }
   ],
   "routes": [
+    { "src": "/dijkstra.js", "dest": "/public/dijkstra.js" },
+    { "src": "/network.csv", "dest": "/public/network.csv" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
