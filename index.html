@@ -1,154 +1,187 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Network Visualization</title>
-  <style>
-    body {
-      width: 1024px;
-      margin: auto;
-      font-family: "Lato", "PT Serif", serif;
-      color: #222222;
-      padding: 0;
-      font-weight: 300;
-      line-height: 33px;
-      -webkit-font-smoothing: antialiased;
-    }
-    .node {
-      stroke: #7f8c8d;
-      stroke-width: 1.5px;
-      fill: #bdc3c7;
-      stroke-dasharray: 2px, 2px;
-    }
-    .link {
-      stroke: #ecf0f1;
-      stroke-opacity: .6;
-    }
-    .linktext {
-      fill: #95a5a6;
-      background-color: #ffffff;
-    }
-    text {
-      pointer-events: none;
-    }
-  </style>
+    <meta charset="utf-8">
+    <title>Network Visualization</title>
+    <style>
+        body {
+            width: 1024px;
+            margin: auto;
+            font-family: "Lato", "PT Serif", serif;
+            color: #222222;
+            padding: 0;
+            font-weight: 300;
+            line-height: 33px;
+            -webkit-font-smoothing: antialiased;
+        }
+        .node {
+            stroke: #7f8c8d;
+            stroke-width: 1.5px;
+            fill: #bdc3c7;
+            stroke-dasharray: 2px, 2px;
+        }
+        .link {
+            stroke: #ecf0f1;
+            stroke-opacity: .6;
+        }
+        .linktext {
+            fill: #95a5a6;
+            background-color: #ffffff;
+        }
+        text {
+            pointer-events: none;
+        }
+        #error-log {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
- <script src="https://d3js.org/d3.v3.min.js"></script>
-<script src="./public/dijkstra.js"></script>
-<script>
+    <div id="error-log"></div>
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <script src="public/dijkstra.js"></script>
+    <script>
+        function logError(message) {
+            console.error(message);
+            document.getElementById('error-log').innerHTML += '<p>' + message + '</p>';
+        }
 
-var width = 960,
-    height = 500;
+        var width = 960,
+            height = 500;
 
-var color = d3.scale.category20();
+        var color = d3.scale.category20();
 
-var force = d3.layout.force()
-    .charge(-4020)
-    .linkDistance(90)
-    .size([width, height]);
+        var force = d3.layout.force()
+            .charge(-4020)
+            .linkDistance(90)
+            .size([width, height]);
 
-var svg = d3.select("body").append("svg")
-    .attr("width", width)
-    .attr("height", height);
+        var svg = d3.select("body").append("svg")
+            .attr("width", width)
+            .attr("height", height);
 
-d3.csv("./public/network.csv", function(error, data) {
-  
-  var nodes = [], nodesByName = {}, links = [];
-  function addNodeByName(fullname) {
-    var name = fullname.split(',')[0];
-    if (!nodesByName[name]) {
-      var node = {"name":name, "links":[]}
-      nodesByName[name] = node;
-      nodes.push(node);
-      return node;
-    }
-    else
-      return nodesByName[name];
-  }
+        d3.csv("public/network.csv", function(error, data) {
+            if (error) {
+                logError("Error loading CSV: " + error.message);
+                return;
+            }
 
-  data.forEach(function(d) {
-    for (k in d) {
-      if (d.hasOwnProperty(k) && k != "nodes" && d[k] < 750) {
-        links.push({"source": addNodeByName(d["nodes"]), "target": addNodeByName(k), "value": parseInt(Math.random()*d[k]*5+1), 'id':addNodeByName(d["nodes"]).name+addNodeByName(k).name })
-      }
-    } 
-  });
+            if (!data || data.length === 0) {
+                logError("CSV data is empty or undefined");
+                return;
+            }
 
-  force
-      .nodes(nodes)
-      .links(links)
-      .start();
+            var nodes = [], nodesByName = {}, links = [];
 
-  var glink = svg.append('g').selectAll(".link")
-      .data(links).enter()
+            function addNodeByName(fullname) {
+                if (!fullname) {
+                    logError("Invalid node name: " + fullname);
+                    return null;
+                }
+                var name = fullname.split(',')[0];
+                if (!nodesByName[name]) {
+                    var node = {"name":name, "links":[]};
+                    nodesByName[name] = node;
+                    nodes.push(node);
+                    return node;
+                }
+                else
+                    return nodesByName[name];
+            }
 
-  var link = glink.append("line")
-      .attr("class", function(d){ return "link "+d.id})
-      .style("stroke-width", 2);
+            data.forEach(function(d) {
+                if (!d.nodes) {
+                    logError("Missing 'nodes' property in data row");
+                    return;
+                }
+                for (var k in d) {
+                    if (d.hasOwnProperty(k) && k != "nodes" && d[k] < 750) {
+                        var source = addNodeByName(d["nodes"]);
+                        var target = addNodeByName(k);
+                        if (source && target) {
+                            links.push({
+                                "source": source, 
+                                "target": target, 
+                                "value": parseInt(Math.random()*d[k]*5+1), 
+                                'id': source.name + target.name
+                            });
+                        }
+                    }
+                }
+            });
 
-  var linktext = glink.append('text')
-      .attr("class", function(d){ return "linktext "+d.id})
-      .attr('text-anchor', 'middle')
-      .style('opacity', 0)
-      .text(function(d){ return d.value})
+            force
+                .nodes(nodes)
+                .links(links)
+                .start();
 
-  var gnode = svg.append('g').selectAll(".node")
-      .data(nodes).enter()
+            var glink = svg.append('g').selectAll(".link")
+                .data(links).enter();
 
-  var node = gnode.append("circle")
-      .attr("class", function(d){ return 'node '+d.name})
-      .attr("r", 15)
-      .call(force.drag);
+            var link = glink.append("line")
+                .attr("class", function(d){ return "link "+d.id})
+                .style("stroke-width", 2);
 
-  var nodetext = gnode.append('text')
-      .attr('text-anchor', 'middle')
-      .attr('dy', '0.35em')
-      .attr("class", function(d){ return "nodetext "+d.name})
-      .text(function(d){ return d.name})
+            var linktext = glink.append('text')
+                .attr("class", function(d){ return "linktext "+d.id})
+                .attr('text-anchor', 'middle')
+                .style('opacity', 0)
+                .text(function(d){ return d.value});
 
-  
-  link.each(function(d) {
-      d.source.links.push(d);
-      d.selection = d3.select(this);
-  });
+            var gnode = svg.append('g').selectAll(".node")
+                .data(nodes).enter();
 
-  node.each(function(d) {
-      d.selection = d3.select(this);
-  });
-  
-  force.on("tick", function() {
-    link.attr("x1", function(d) { return d.source.x; })
-        .attr("y1", function(d) { return d.source.y; })
-        .attr("x2", function(d) { return d.target.x; })
-        .attr("y2", function(d) { return d.target.y; });
+            var node = gnode.append("circle")
+                .attr("class", function(d){ return 'node '+d.name})
+                .attr("r", 15)
+                .call(force.drag);
 
-    linktext.attr("x", function(d) { return (d.source.x + d.target.x)/2 ; })
-        .attr("y", function(d) { return (d.source.y + d.target.y)/2; })
+            var nodetext = gnode.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '0.35em')
+                .attr("class", function(d){ return "nodetext "+d.name})
+                .text(function(d){ return d.name});
 
-    nodetext.attr("x", function(d) { return d.x ; })
-        .attr("y", function(d) { return d.y; })
+            link.each(function(d) {
+                d.source.links.push(d);
+                d.selection = d3.select(this);
+            });
 
-    node.attr("cx", function(d) { return d.x; })
-        .attr("cy", function(d) { return d.y; });
-  });
+            node.each(function(d) {
+                d.selection = d3.select(this);
+            });
 
-  
-  node.on("mouseover", function(d) {
-      d3.select(this).attr('r', 16.5);
-      
-  });
+            force.on("tick", function() {
+                link.attr("x1", function(d) { return d.source.x; })
+                    .attr("y1", function(d) { return d.source.y; })
+                    .attr("x2", function(d) { return d.target.x; })
+                    .attr("y2", function(d) { return d.target.y; });
 
-  node.on("mouseout", function(d) {
-      d3.select(this).attr('r', 15);
-  });
-    
-  var dijkstra = d3.dijkstra()
-    .nodes(nodes)
-    .edges(links);
+                linktext.attr("x", function(d) { return (d.source.x + d.target.x)/2 ; })
+                    .attr("y", function(d) { return (d.source.y + d.target.y)/2; });
 
-  node.on("click", dijkstra.start);
+                nodetext.attr("x", function(d) { return d.x ; })
+                    .attr("y", function(d) { return d.y; });
 
- });
+                node.attr("cx", function(d) { return d.x; })
+                    .attr("cy", function(d) { return d.y; });
+            });
 
-</script>
+            node.on("mouseover", function(d) {
+                d3.select(this).attr('r', 16.5);
+            });
+
+            node.on("mouseout", function(d) {
+                d3.select(this).attr('r', 15);
+            });
+
+            var dijkstra = d3.dijkstra()
+                .nodes(nodes)
+                .edges(links);
+
+            node.on("click", dijkstra.start);
+        });
+    </script>
+</body>
+</html>
