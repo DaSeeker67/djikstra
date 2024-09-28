@@ -34,17 +34,31 @@
         #error-log {
             color: red;
             font-weight: bold;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
     <div id="error-log"></div>
     <script src="https://d3js.org/d3.v3.min.js"></script>
-    <script src="public/dijkstra.js"></script>
+    <script src="/public/dijkstra.js"></script>
     <script>
         function logError(message) {
             console.error(message);
-            document.getElementById('error-log').innerHTML += '<p>' + message + '</p>';
+            var errorLog = document.getElementById('error-log');
+            errorLog.innerHTML += '<p>' + message + '</p>';
+            errorLog.scrollTop = errorLog.scrollHeight;
+        }
+
+        function logInfo(message) {
+            console.log(message);
+            var errorLog = document.getElementById('error-log');
+            errorLog.innerHTML += '<p style="color: blue;">' + message + '</p>';
+            errorLog.scrollTop = errorLog.scrollHeight;
         }
 
         var width = 960,
@@ -61,7 +75,7 @@
             .attr("width", width)
             .attr("height", height);
 
-        d3.csv("public/network.csv", function(error, data) {
+        d3.csv("/public/network.csv", function(error, data) {
             if (error) {
                 logError("Error loading CSV: " + error.message);
                 return;
@@ -72,6 +86,9 @@
                 return;
             }
 
+            logInfo("CSV data loaded. Row count: " + data.length);
+            logInfo("First row data: " + JSON.stringify(data[0]));
+
             var nodes = [], nodesByName = {}, links = [];
 
             function addNodeByName(fullname) {
@@ -79,9 +96,9 @@
                     logError("Invalid node name: " + fullname);
                     return null;
                 }
-                var name = fullname.split(',')[0];
+                var name = fullname;
                 if (!nodesByName[name]) {
-                    var node = {"name":name, "links":[]};
+                    var node = {"name": name, "links": []};
                     nodesByName[name] = node;
                     nodes.push(node);
                     return node;
@@ -90,26 +107,33 @@
                     return nodesByName[name];
             }
 
-            data.forEach(function(d) {
-                if (!d.nodes) {
-                    logError("Missing 'nodes' property in data row");
+            // Assume the first column is the source node
+            var sourceColumnName = Object.keys(data[0])[0];
+
+            data.forEach(function(d, index) {
+                var sourceNode = addNodeByName(d[sourceColumnName]);
+                if (!sourceNode) {
+                    logError("Failed to create source node for row " + index);
                     return;
                 }
-                for (var k in d) {
-                    if (d.hasOwnProperty(k) && k != "nodes" && d[k] < 750) {
-                        var source = addNodeByName(d["nodes"]);
-                        var target = addNodeByName(k);
-                        if (source && target) {
+
+                Object.keys(d).forEach(function(k) {
+                    if (k !== sourceColumnName && !isNaN(parseFloat(d[k])) && parseFloat(d[k]) < 750) {
+                        var targetNode = addNodeByName(k);
+                        if (targetNode) {
                             links.push({
-                                "source": source, 
-                                "target": target, 
-                                "value": parseInt(Math.random()*d[k]*5+1), 
-                                'id': source.name + target.name
+                                "source": sourceNode,
+                                "target": targetNode,
+                                "value": parseFloat(d[k]),
+                                'id': sourceNode.name + targetNode.name
                             });
                         }
                     }
-                }
+                });
             });
+
+            logInfo("Nodes created: " + nodes.length);
+            logInfo("Links created: " + links.length);
 
             force
                 .nodes(nodes)
