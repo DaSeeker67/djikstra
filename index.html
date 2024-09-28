@@ -2,209 +2,407 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Network Visualization</title>
+    <title>Network Visualization with Visual Calculation</title>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
     <style>
         body {
-            width: 1024px;
-            margin: auto;
-            font-family: "Lato", "PT Serif", serif;
-            color: #222222;
-            padding: 0;
-            font-weight: 300;
-            line-height: 33px;
-            -webkit-font-smoothing: antialiased;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        #visualization-container {
+            display: flex;
+            justify-content: space-between;
+        }
+        #network-vis {
+            width: 70%;
+            height: 600px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        #controls {
+            width: 25%;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         .node {
-            stroke: #7f8c8d;
-            stroke-width: 1.5px;
-            fill: #bdc3c7;
-            stroke-dasharray: 2px, 2px;
+            cursor: pointer;
         }
         .link {
-            stroke: #ecf0f1;
-            stroke-opacity: .6;
+            stroke: #999;
+            stroke-opacity: 0.6;
         }
-        .linktext {
-            fill: #95a5a6;
-            background-color: #ffffff;
-        }
-        text {
+        .node text {
             pointer-events: none;
+            font: 10px sans-serif;
         }
-        #error-log {
-            color: red;
+        button {
+            margin: 5px 0;
+            padding: 8px 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #shortest-path {
+            margin-top: 20px;
             font-weight: bold;
-            max-height: 200px;
-            overflow-y: auto;
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin-bottom: 20px;
+        }
+        #legend {
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border-radius: 50%;
+        }
+        .node-label {
+            font-size: 12px;
+            text-anchor: middle;
+        }
+        .distance-label {
+            font-size: 10px;
+            fill: #2196F3;
         }
     </style>
 </head>
 <body>
-    <div id="error-log"></div>
-    <script src="https://d3js.org/d3.v3.min.js"></script>
-    <script src="/public/dijkstra.js"></script>
+    <h1>Network Visualization with Visual Calculation</h1>
+    <div id="visualization-container">
+        <div id="network-vis"></div>
+        <div id="controls">
+            <h3>Controls</h3>
+            <button id="reset">Reset Visualization</button>
+            <button id="toggle-labels">Toggle Labels</button>
+            <div>
+                <label for="source-node">Source Node:</label>
+                <select id="source-node"></select>
+            </div>
+            <div>
+                <label for="target-node">Target Node:</label>
+                <select id="target-node"></select>
+            </div>
+            <button id="find-path">Find Shortest Path</button>
+            <button id="next-step">Next Step</button>
+            <div id="shortest-path"></div>
+            <div id="legend">
+                <h4>Legend</h4>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #1f77b4;"></div>
+                    <span>Unvisited Node</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #ff7f0e;"></div>
+                    <span>Source Node</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #2ca02c;"></div>
+                    <span>Target Node</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #d62728;"></div>
+                    <span>Current Node</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #9467bd;"></div>
+                    <span>Visited Node</span>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
-        function logError(message) {
-            console.error(message);
-            var errorLog = document.getElementById('error-log');
-            errorLog.innerHTML += '<p>' + message + '</p>';
-            errorLog.scrollTop = errorLog.scrollHeight;
-        }
+        // Embedded CSV data
+        const csvData = `Node,A,B,C,D,E,F,G
+A,0,4,3,Inf,7,Inf,Inf
+B,4,0,6,5,Inf,Inf,Inf
+C,3,6,0,11,8,Inf,Inf
+D,Inf,5,11,0,2,2,10
+E,7,Inf,8,2,0,5,Inf
+F,Inf,Inf,Inf,2,5,0,3
+G,Inf,Inf,Inf,10,Inf,3,0`;
 
-        function logInfo(message) {
-            console.log(message);
-            var errorLog = document.getElementById('error-log');
-            errorLog.innerHTML += '<p style="color: blue;">' + message + '</p>';
-            errorLog.scrollTop = errorLog.scrollHeight;
-        }
+        // Parse CSV data
+        const data = d3.csvParse(csvData);
 
-        var width = 960,
-            height = 500;
-
-        var color = d3.scale.category20();
-
-        var force = d3.layout.force()
-            .charge(-4020)
-            .linkDistance(90)
-            .size([width, height]);
-
-        var svg = d3.select("body").append("svg")
+        // Set up the SVG
+        const width = document.getElementById('network-vis').clientWidth;
+        const height = 600;
+        const svg = d3.select("#network-vis")
+            .append("svg")
             .attr("width", width)
             .attr("height", height);
 
-        d3.csv("/public/network.csv", function(error, data) {
-            if (error) {
-                logError("Error loading CSV: " + error.message);
-                return;
-            }
+        // Create a group for the network
+        const g = svg.append("g");
 
-            if (!data || data.length === 0) {
-                logError("CSV data is empty or undefined");
-                return;
-            }
+        // Add zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", () => g.attr("transform", d3.event.transform));
 
-            logInfo("CSV data loaded. Row count: " + data.length);
-            logInfo("First row data: " + JSON.stringify(data[0]));
+        svg.call(zoom);
 
-            var nodes = [], nodesByName = {}, links = [];
+        // Parse nodes and links from CSV data
+        const nodes = data.map(d => ({ id: d.Node, distance: Infinity }));
+        const links = [];
 
-            function addNodeByName(fullname) {
-                if (!fullname) {
-                    logError("Invalid node name: " + fullname);
-                    return null;
+        data.forEach(row => {
+            Object.entries(row).forEach(([col, val]) => {
+                if (col !== "Node" && val !== "Inf" && val !== "0") {
+                    links.push({
+                        source: row.Node,
+                        target: col,
+                        value: parseFloat(val)
+                    });
                 }
-                var name = fullname;
-                if (!nodesByName[name]) {
-                    var node = {"name": name, "links": []};
-                    nodesByName[name] = node;
-                    nodes.push(node);
-                    return node;
-                }
-                else
-                    return nodesByName[name];
-            }
+            });
+        });
 
-            // Assume the first column is the source node
-            var sourceColumnName = Object.keys(data[0])[0];
+        // Set up the force simulation
+        const simulation = d3.forceSimulation(nodes)
+            .force("link", d3.forceLink(links).id(d => d.id).distance(100))
+            .force("charge", d3.forceManyBody().strength(-300))
+            .force("center", d3.forceCenter(width / 2, height / 2));
 
-            data.forEach(function(d, index) {
-                var sourceNode = addNodeByName(d[sourceColumnName]);
-                if (!sourceNode) {
-                    logError("Failed to create source node for row " + index);
-                    return;
-                }
+        // Create the links
+        const link = g.append("g")
+            .selectAll("line")
+            .data(links)
+            .enter().append("line")
+            .attr("class", "link")
+            .attr("stroke-width", d => Math.sqrt(d.value));
 
-                Object.keys(d).forEach(function(k) {
-                    if (k !== sourceColumnName && !isNaN(parseFloat(d[k])) && parseFloat(d[k]) < 750) {
-                        var targetNode = addNodeByName(k);
-                        if (targetNode) {
-                            links.push({
-                                "source": sourceNode,
-                                "target": targetNode,
-                                "value": parseFloat(d[k]),
-                                'id': sourceNode.name + targetNode.name
-                            });
-                        }
+        // Create the nodes
+        const node = g.append("g")
+            .selectAll("circle")
+            .data(nodes)
+            .enter().append("circle")
+            .attr("class", "node")
+            .attr("r", 15)
+            .attr("fill", "#1f77b4")
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+
+        // Add labels to the nodes
+        const nodeLabel = g.append("g")
+            .selectAll("text")
+            .data(nodes)
+            .enter().append("text")
+            .attr("class", "node-label")
+            .text(d => d.id)
+            .attr("dy", -20);
+
+        // Add distance labels to the nodes
+        const distanceLabel = g.append("g")
+            .selectAll("text")
+            .data(nodes)
+            .enter().append("text")
+            .attr("class", "distance-label")
+            .text(d => d.distance === Infinity ? "∞" : d.distance)
+            .attr("dy", 20);
+
+        // Add titles (tooltips) to the nodes
+        node.append("title")
+            .text(d => d.id);
+
+        // Define the tick function for the simulation
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            node
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
+
+            nodeLabel
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+
+            distanceLabel
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+        });
+
+        // Drag functions
+        function dragstarted(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(d) {
+            d.fx = d3.event.x;
+            d.fy = d3.event.y;
+        }
+
+        function dragended(d) {
+            if (!d3.event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // Populate node selection dropdowns
+        const sourceSelect = document.getElementById("source-node");
+        const targetSelect = document.getElementById("target-node");
+
+        nodes.forEach(node => {
+            const option1 = document.createElement("option");
+            const option2 = document.createElement("option");
+            option1.text = option2.text = node.id;
+            option1.value = option2.value = node.id;
+            sourceSelect.add(option1);
+            targetSelect.add(option2);
+        });
+
+        // Dijkstra's algorithm implementation with visual step-by-step calculation
+        let dijkstraState = null;
+
+        function initializeDijkstra(source, target) {
+            nodes.forEach(node => {
+                node.distance = Infinity;
+                node.visited = false;
+                node.previous = null;
+            });
+
+            const sourceNode = nodes.find(n => n.id === source);
+            sourceNode.distance = 0;
+
+            dijkstraState = {
+                unvisited: new Set(nodes),
+                source: sourceNode,
+                target: nodes.find(n => n.id === target),
+                current: sourceNode,
+                finished: false
+            };
+
+            updateVisualization();
+        }
+
+        function dijkstraStep() {
+            if (dijkstraState.finished) return;
+
+            dijkstraState.current.visited = true;
+            dijkstraState.unvisited.delete(dijkstraState.current);
+
+            const neighbors = links.filter(link => 
+                link.source.id === dijkstraState.current.id || link.target.id === dijkstraState.current.id
+            );
+
+            neighbors.forEach(link => {
+                const neighbor = link.source.id === dijkstraState.current.id ? link.target : link.source;
+                if (!neighbor.visited) {
+                    const distance = dijkstraState.current.distance + link.value;
+                    if (distance < neighbor.distance) {
+                        neighbor.distance = distance;
+                        neighbor.previous = dijkstraState.current;
                     }
-                });
+                }
             });
 
-            logInfo("Nodes created: " + nodes.length);
-            logInfo("Links created: " + links.length);
+            if (dijkstraState.current === dijkstraState.target || dijkstraState.unvisited.size === 0) {
+                dijkstraState.finished = true;
+            } else {
+                dijkstraState.current = Array.from(dijkstraState.unvisited).reduce((min, node) => 
+                    node.distance < min.distance ? node : min
+                );
+            }
 
-            force
-                .nodes(nodes)
-                .links(links)
-                .start();
+            updateVisualization();
+        }
 
-            var glink = svg.append('g').selectAll(".link")
-                .data(links).enter();
-
-            var link = glink.append("line")
-                .attr("class", function(d){ return "link "+d.id})
-                .style("stroke-width", 2);
-
-            var linktext = glink.append('text')
-                .attr("class", function(d){ return "linktext "+d.id})
-                .attr('text-anchor', 'middle')
-                .style('opacity', 0)
-                .text(function(d){ return d.value});
-
-            var gnode = svg.append('g').selectAll(".node")
-                .data(nodes).enter();
-
-            var node = gnode.append("circle")
-                .attr("class", function(d){ return 'node '+d.name})
-                .attr("r", 15)
-                .call(force.drag);
-
-            var nodetext = gnode.append('text')
-                .attr('text-anchor', 'middle')
-                .attr('dy', '0.35em')
-                .attr("class", function(d){ return "nodetext "+d.name})
-                .text(function(d){ return d.name});
-
-            link.each(function(d) {
-                d.source.links.push(d);
-                d.selection = d3.select(this);
+        function updateVisualization() {
+            node.attr("fill", d => {
+                if (d === dijkstraState.source) return "#ff7f0e";
+                if (d === dijkstraState.target) return "#2ca02c";
+                if (d === dijkstraState.current) return "#d62728";
+                if (d.visited) return "#9467bd";
+                return "#1f77b4";
             });
 
-            node.each(function(d) {
-                d.selection = d3.select(this);
+            distanceLabel.text(d => d.distance === Infinity ? "∞" : d.distance.toFixed(1));
+
+            link.attr("stroke", d => {
+                if (d.source === dijkstraState.current || d.target === dijkstraState.current) {
+                    return "#d62728";
+                }
+                return "#999";
+            }).attr("stroke-width", d => {
+                if (d.source === dijkstraState.current || d.target === dijkstraState.current) {
+                    return 3;
+                }
+                return Math.sqrt(d.value);
             });
+        }
 
-            force.on("tick", function() {
-                link.attr("x1", function(d) { return d.source.x; })
-                    .attr("y1", function(d) { return d.source.y; })
-                    .attr("x2", function(d) { return d.target.x; })
-                    .attr("y2", function(d) { return d.target.y; });
+        // Find shortest path button click handler
+        document.getElementById("find-path").addEventListener("click", () => {
+            const source = sourceSelect.value;
+            const target = targetSelect.value;
 
-                linktext.attr("x", function(d) { return (d.source.x + d.target.x)/2 ; })
-                    .attr("y", function(d) { return (d.source.y + d.target.y)/2; });
+            if (source === target) {
+                document.getElementById("shortest-path").textContent = "Source and target nodes are the same.";
+                return;
+            }
 
-                nodetext.attr("x", function(d) { return d.x ; })
-                    .attr("y", function(d) { return d.y; });
+            initializeDijkstra(source, target);
+        });
 
-                node.attr("cx", function(d) { return d.x; })
-                    .attr("cy", function(d) { return d.y; });
+        // Next step button click handler
+        document.getElementById("next-step").addEventListener("click", () => {
+            if (dijkstraState && !dijkstraState.finished) {
+                dijkstraStep();
+                if (dijkstraState.finished) {
+                    const path = [];
+                    let current = dijkstraState.target;
+                    while (current) {
+                        path.unshift(current.id);
+                        current = current.previous;
+                    }
+                    document.getElementById("shortest-path").textContent = `Shortest path: ${path.join(" -> ")}. Distance: ${dijkstraState.target.distance}`;
+                }
+            }
+        });
+
+        // Reset visualization button click handler
+        document.getElementById("reset").addEventListener("click", () => {
+            dijkstraState = null;
+            nodes.forEach(node => {
+                node.distance = Infinity;
+                node.visited = false;
+                node.previous = null;
             });
+            node.attr("fill", "#1f77b4");
+            link.attr("stroke", "#999").attr("stroke-width", d => Math.sqrt(d.value));
+            distanceLabel.text("∞");
+            document.getElementById("shortest-path").textContent = "";
+        });
 
-            node.on("mouseover", function(d) {
-                d3.select(this).attr('r', 16.5);
-            });
-
-            node.on("mouseout", function(d) {
-                d3.select(this).attr('r', 15);
-            });
-
-            var dijkstra = d3.dijkstra()
-                .nodes(nodes)
-                .edges(links);
-
-            node.on("click", dijkstra.start);
+        // Toggle labels button click handler
+        let labelsVisible = true;
+        document.getElementById("toggle-labels").addEventListener("click", () => {
+            labelsVisible = !labelsVisible;
+            nodeLabel.attr("opacity", labelsVisible ? 1 : 0);
+            distanceLabel.attr("opacity", labelsVisible ? 1 : 0);
         });
     </script>
 </body>
